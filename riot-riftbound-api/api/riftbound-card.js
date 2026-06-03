@@ -30,21 +30,42 @@ export default async function handler(req, res) {
   const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
   if (!RIOT_API_KEY) {
-    return res.status(500).json({ error: "Missing Riot API key in Vercel" });
+    return res.status(500).json({ error: "Missing Riot API key" });
   }
 
   try {
-    const riotUrl = `https://americas.api.riotgames.com/riftbound/content/v1/cards?name=${encodeURIComponent(name)}`;
+    const riotUrl =
+      "https://americas.api.riotgames.com/riftbound/content/v1/contents?locale=en";
 
     const riotResponse = await fetch(riotUrl, {
       headers: {
-        "X-Riot-Token": RIOT_API_KEY
+        "X-Riot-Token": RIOT_API_KEY,
+        "Accept": "application/json"
       }
     });
 
     const data = await riotResponse.json();
 
-    return res.status(riotResponse.status).json(data);
+    if (!riotResponse.ok) {
+      return res.status(riotResponse.status).json(data);
+    }
+
+    const search = name.toLowerCase();
+
+    const cards = data.cards || data.Cards || [];
+
+    const matches = cards.filter(card => {
+      const cardName =
+        card.name ||
+        card.Name ||
+        card.title ||
+        card.Title ||
+        "";
+
+      return cardName.toLowerCase().includes(search);
+    });
+
+    return res.status(200).json(matches);
   } catch (err) {
     return res.status(500).json({
       error: "Server error",
