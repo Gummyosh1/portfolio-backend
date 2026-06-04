@@ -1,3 +1,7 @@
+let cachedContent = null;
+let cachedAt = 0;
+const CACHE_TIME_MS = 1000 * 60 * 15;
+
 export default async function handler(req, res) {
   const allowedOrigins = [
     "http://127.0.0.1:5500",
@@ -21,21 +25,21 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: "Forbidden origin", origin });
   }
 
-  const { name } = req.query;
-
-  if (!name) {
-    return res.status(400).json({ error: "Missing card name" });
-  }
-
   const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
   if (!RIOT_API_KEY) {
-    return res.status(500).json({ error: "Missing Riot API key" });
+    return res.status(500).json({ error: "Missing Riot API key in Vercel" });
+  }
+
+  const forceRefresh = req.query.refresh === "true";
+  const cacheIsFresh = cachedContent && Date.now() - cachedAt < CACHE_TIME_MS;
+
+  if (!forceRefresh && cacheIsFresh) {
+    return res.status(200).json(cachedContent);
   }
 
   try {
-    const riotUrl =
-      "https://americas.api.riotgames.com/riftbound/content/v1/contents?locale=en";
+    const riotUrl = "https://americas.api.riotgames.com/riftbound/content/v1/contents?locale=en";
 
     const riotResponse = await fetch(riotUrl, {
       headers: {
@@ -50,22 +54,10 @@ export default async function handler(req, res) {
       return res.status(riotResponse.status).json(data);
     }
 
-    const search = name.toLowerCase();
+    cachedContent = data;
+    cachedAt = Date.now();
 
-    const cards = data.cards || data.Cards || [];
-
-    const matches = cards.filter(card => {
-      const cardName =
-        card.name ||
-        card.Name ||
-        card.title ||
-        card.Title ||
-        "";
-
-      return cardName.toLowerCase().includes(search);
-    });
-
-    return res.status(200).json(matches);
+    return res.status(200).json(data);
   } catch (err) {
     return res.status(500).json({
       error: "Server error",
